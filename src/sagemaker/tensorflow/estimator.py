@@ -305,7 +305,7 @@ class TensorFlow(Framework):
         return init_params
 
     def create_model(self, model_server_workers=None, role=None,
-                     vpc_config_override=VPC_CONFIG_DEFAULT, endpoint_type=None):
+                     vpc_config_override=VPC_CONFIG_DEFAULT, endpoint_type=None, **kwargs):
         """Create a SageMaker ``TensorFlowModel`` object that can be deployed to an ``Endpoint``.
 
         Args:
@@ -329,12 +329,12 @@ class TensorFlow(Framework):
 
         role = role or self.role
         if endpoint_type == 'tensorflow-serving':
-            return self._create_tfs_model(role=role, vpc_config_override=vpc_config_override)
+            return self._create_tfs_model(role=role, vpc_config_override=vpc_config_override, **kwargs)
 
         return self._create_default_model(model_server_workers=model_server_workers, role=role,
                                           vpc_config_override=vpc_config_override)
 
-    def _create_tfs_model(self, role=None, vpc_config_override=VPC_CONFIG_DEFAULT):
+    def _create_tfs_model(self, role=None, vpc_config_override=VPC_CONFIG_DEFAULT, **kwargs):
         return Model(model_data=self.model_data,
                      role=role,
                      image=self.image_name,
@@ -342,7 +342,8 @@ class TensorFlow(Framework):
                      container_log_level=self.container_log_level,
                      framework_version=self.framework_version,
                      sagemaker_session=self.sagemaker_session,
-                     vpc_config=self.get_vpc_config(vpc_config_override))
+                     vpc_config=self.get_vpc_config(vpc_config_override),
+                     **kwargs)
 
     def _create_default_model(self, model_server_workers, role, vpc_config_override):
         return TensorFlowModel(self.model_data, role, self.entry_point,

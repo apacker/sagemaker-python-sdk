@@ -35,6 +35,8 @@ class Chainer(Framework):
     _process_slots_per_host = "sagemaker_process_slots_per_host"
     _additional_mpi_options = "sagemaker_additional_mpi_options"
 
+    LATEST_VERSION = '5.0.0'
+
     def __init__(self, entry_point, use_mpi=None, num_processes=None, process_slots_per_host=None,
                  additional_mpi_options=None, source_dir=None, hyperparameters=None, py_version='py3',
                  framework_version=None, image_name=None, **kwargs):
@@ -82,7 +84,7 @@ class Chainer(Framework):
             **kwargs: Additional kwargs passed to the :class:`~sagemaker.estimator.Framework` constructor.
         """
         if framework_version is None:
-            logger.warning(empty_framework_version_warning(CHAINER_VERSION, CHAINER_VERSION))
+            logger.warning(empty_framework_version_warning(CHAINER_VERSION, self.LATEST_VERSION))
         self.framework_version = framework_version or CHAINER_VERSION
 
         super(Chainer, self).__init__(entry_point, source_dir, hyperparameters,
@@ -131,7 +133,7 @@ class Chainer(Framework):
                             py_version=self.py_version, framework_version=self.framework_version,
                             model_server_workers=model_server_workers, image=self.image_name,
                             sagemaker_session=self.sagemaker_session,
-                            vpc_config=self.get_vpc_config(vpc_config_override))
+                            vpc_config=self.get_vpc_config(vpc_config_override), dependencies=self.dependencies)
 
     @classmethod
     def _prepare_init_params_from_job_description(cls, job_details, model_channel_name=None):

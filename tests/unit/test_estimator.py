@@ -18,12 +18,13 @@ import os
 from time import sleep
 
 import pytest
-from mock import Mock, patch
+from mock import MagicMock, Mock, patch
 
-from sagemaker.estimator import Estimator, Framework, _TrainingJob
+from sagemaker.algorithm import AlgorithmEstimator
+from sagemaker.estimator import Estimator, EstimatorBase, Framework, _TrainingJob
 from sagemaker.model import FrameworkModel
 from sagemaker.predictor import RealTimePredictor
-from sagemaker.session import s3_input
+from sagemaker.session import s3_input, ShuffleConfig
 from sagemaker.transformer import Transformer
 
 MODEL_DATA = "s3://bucket/model.tar.gz"
@@ -37,6 +38,7 @@ TIMESTAMP = '2017-11-06-14:14:15.671'
 BUCKET_NAME = 'mybucket'
 INSTANCE_COUNT = 1
 INSTANCE_TYPE = 'c4.4xlarge'
+ACCELERATOR_TYPE = 'ml.eia.medium'
 ROLE = 'DummyRole'
 IMAGE_NAME = 'fakeimage'
 REGION = 'us-west-2'
@@ -127,6 +129,12 @@ class DummyFrameworkModel(FrameworkModel):
         return MODEL_CONTAINER_DEF
 
 
+@pytest.fixture(autouse=True)
+def mock_create_tar_file():
+    with patch('sagemaker.utils.create_tar_file', MagicMock()) as create_tar_file:
+        yield create_tar_file
+
+
 @pytest.fixture()
 def sagemaker_session():
     boto_mock = Mock(name='boto_session', region_name=REGION)
@@ -143,7 +151,8 @@ def test_framework_all_init_args(sagemaker_session):
                        sagemaker_session=sagemaker_session, train_volume_size=123, train_volume_kms_key='volumekms',
                        train_max_run=456, input_mode='inputmode', output_path='outputpath', output_kms_key='outputkms',
                        base_job_name='basejobname', tags=[{'foo': 'bar'}], subnets=['123', '456'],
-                       security_group_ids=['789', '012'])
+                       security_group_ids=['789', '012'],
+                       metric_definitions=[{'Name': 'validation-rmse', 'Regex': 'validation-rmse=(\\d+)'}])
     _TrainingJob.start_new(f, 's3://mydata')
     sagemaker_session.train.assert_called_once()
     _, args = sagemaker_session.train.call_args
@@ -158,7 +167,16 @@ def test_framework_all_init_args(sagemaker_session):
                     'stop_condition': {'MaxRuntimeInSeconds': 456},
                     'role': sagemaker_session.expand_role(), 'job_name': None,
                     'resource_config': {'VolumeSizeInGB': 123, 'InstanceCount': 3, 'VolumeKmsKeyId': 'volumekms',
-                                        'InstanceType': 'ml.m4.xlarge'}}
+                                        'InstanceType': 'ml.m4.xlarge'},
+                    'metric_definitions': [{'Name': 'validation-rmse', 'Regex': 'validation-rmse=(\\d+)'}]}
+
+
+def test_framework_init_s3_entry_point_invalid(sagemaker_session):
+    with pytest.raises(ValueError) as error:
+        DummyFramework('s3://remote-script-because-im-mistaken', role=ROLE,
+                       sagemaker_session=sagemaker_session, train_instance_count=INSTANCE_COUNT,
+                       train_instance_type=INSTANCE_TYPE)
+    assert 'Must be a path to a local file' in str(error)
 
 
 def test_sagemaker_s3_uri_invalid(sagemaker_session):
@@ -265,6 +283,30 @@ def test_invalid_custom_code_bucket(sagemaker_session):
     with pytest.raises(ValueError) as error:
         t.fit('s3://bucket/mydata')
     assert "Expecting 's3' scheme" in str(error)
+
+
+def test_augmented_manifest(sagemaker_session):
+    fw = DummyFramework(entry_point=SCRIPT_PATH, role='DummyRole', sagemaker_session=sagemaker_session,
+                        train_instance_count=INSTANCE_COUNT, train_instance_type=INSTANCE_TYPE,
+                        enable_cloudwatch_metrics=True)
+    fw.fit(inputs=s3_input('s3://mybucket/train_manifest', s3_data_type='AugmentedManifestFile',
+                           attribute_names=['foo', 'bar']))
+
+    _, _, train_kwargs = sagemaker_session.train.mock_calls[0]
+    s3_data_source = train_kwargs['input_config'][0]['DataSource']['S3DataSource']
+    assert s3_data_source['S3Uri'] == 's3://mybucket/train_manifest'
+    assert s3_data_source['S3DataType'] == 'AugmentedManifestFile'
+    assert s3_data_source['AttributeNames'] == ['foo', 'bar']
+
+
+def test_shuffle_config(sagemaker_session):
+    fw = DummyFramework(entry_point=SCRIPT_PATH, role='DummyRole', sagemaker_session=sagemaker_session,
+                        train_instance_count=INSTANCE_COUNT, train_instance_type=INSTANCE_TYPE,
+                        enable_cloudwatch_metrics=True)
+    fw.fit(inputs=s3_input('s3://mybucket/train_manifest', shuffle_config=ShuffleConfig(100)))
+    _, _, train_kwargs = sagemaker_session.train.mock_calls[0]
+    channel = train_kwargs['input_config'][0]
+    assert channel['ShuffleConfig']['Seed'] == 100
 
 
 BASE_HP = {
@@ -711,7 +753,8 @@ NO_INPUT_TRAIN_CALL = {
     },
     'stop_condition': {'MaxRuntimeInSeconds': 86400},
     'tags': None,
-    'vpc_config': None
+    'vpc_config': None,
+    'metric_definitions': None
 }
 
 INPUT_CONFIG = [{
@@ -901,6 +944,19 @@ def test_generic_deploy_vpc_config_override(sagemaker_session):
     assert sagemaker_session.create_model.call_args_list[3][1]['vpc_config'] is None
 
 
+def test_generic_deploy_accelerator_type(sagemaker_session):
+    e = Estimator(IMAGE_NAME, ROLE, INSTANCE_COUNT, INSTANCE_TYPE,
+                  sagemaker_session=sagemaker_session)
+    e.fit({'train': 's3://bucket/training-prefix'})
+    e.deploy(INSTANCE_COUNT, INSTANCE_TYPE, ACCELERATOR_TYPE)
+
+    args = e.sagemaker_session.endpoint_from_production_variants.call_args[0]
+    assert args[0].startswith(IMAGE_NAME)
+    assert args[1][0]['AcceleratorType'] == ACCELERATOR_TYPE
+    assert args[1][0]['InitialInstanceCount'] == INSTANCE_COUNT
+    assert args[1][0]['InstanceType'] == INSTANCE_TYPE
+
+
 @patch('sagemaker.estimator.LocalSession')
 @patch('sagemaker.estimator.Session')
 def test_local_mode(session_class, local_session_class):
@@ -948,5 +1004,73 @@ def test_file_output_path_not_supported_outside_local_mode(session_class):
 
     with pytest.raises(RuntimeError):
         Estimator(IMAGE_NAME, ROLE, INSTANCE_COUNT, INSTANCE_TYPE, output_path='file:///tmp/model')
+
+
+def test_prepare_init_params_from_job_description_with_image_training_job():
+
+    init_params = EstimatorBase._prepare_init_params_from_job_description(
+        job_details=RETURNED_JOB_DESCRIPTION)
+
+    assert init_params['role'] == 'arn:aws:iam::366:role/SageMakerRole'
+    assert init_params['train_instance_count'] == 1
+    assert init_params['image'] == '1.dkr.ecr.us-west-2.amazonaws.com/sagemaker-other-py2-cpu:1.0.4'
+
+
+def test_prepare_init_params_from_job_description_with_algorithm_training_job():
+
+    algorithm_job_description = RETURNED_JOB_DESCRIPTION.copy()
+    algorithm_job_description['AlgorithmSpecification'] = {
+        'TrainingInputMode': 'File',
+        'AlgorithmName': 'arn:aws:sagemaker:us-east-2:1234:algorithm/scikit-decision-trees'
+    }
+
+    init_params = EstimatorBase._prepare_init_params_from_job_description(
+        job_details=algorithm_job_description)
+
+    assert init_params['role'] == 'arn:aws:iam::366:role/SageMakerRole'
+    assert init_params['train_instance_count'] == 1
+    assert init_params['algorithm_arn'] == 'arn:aws:sagemaker:us-east-2:1234:algorithm/scikit-decision-trees'
+
+
+def test_prepare_init_params_from_job_description_with_invalid_training_job():
+
+    invalid_job_description = RETURNED_JOB_DESCRIPTION.copy()
+    invalid_job_description['AlgorithmSpecification'] = {
+        'TrainingInputMode': 'File',
+    }
+
+    with pytest.raises(RuntimeError) as error:
+        EstimatorBase._prepare_init_params_from_job_description(job_details=invalid_job_description)
+        assert 'Invalid AlgorithmSpecification' in str(error)
+
+
+def test_prepare_for_training_with_base_name(sagemaker_session):
+    estimator = Estimator(image_name='some-image', role='some_image', train_instance_count=1,
+                          train_instance_type='ml.m4.xlarge', sagemaker_session=sagemaker_session,
+                          base_job_name='base_job_name')
+
+    estimator._prepare_for_training()
+    assert 'base_job_name' in estimator._current_job_name
+
+
+def test_prepare_for_training_with_name_based_on_image(sagemaker_session):
+    estimator = Estimator(image_name='some-image', role='some_image', train_instance_count=1,
+                          train_instance_type='ml.m4.xlarge', sagemaker_session=sagemaker_session)
+
+    estimator._prepare_for_training()
+    assert 'some-image' in estimator._current_job_name
+
+
+@patch('sagemaker.algorithm.AlgorithmEstimator.validate_train_spec', Mock())
+@patch('sagemaker.algorithm.AlgorithmEstimator._parse_hyperparameters', Mock(return_value={}))
+def test_prepare_for_training_with_name_based_on_algorithm(sagemaker_session):
+    estimator = AlgorithmEstimator(
+        algorithm_arn='arn:aws:sagemaker:us-west-2:1234:algorithm/scikit-decision-trees-1542410022',
+        role='some_image', train_instance_count=1, train_instance_type='ml.m4.xlarge',
+        sagemaker_session=sagemaker_session)
+
+    estimator._prepare_for_training()
+    assert 'scikit-decision-trees-1542410022' in estimator._current_job_name
+
 
 #################################################################################

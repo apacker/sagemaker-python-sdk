@@ -29,6 +29,8 @@ class PyTorch(Framework):
 
     __framework_name__ = "pytorch"
 
+    LATEST_VERSION = '1.0'
+
     def __init__(self, entry_point, source_dir=None, hyperparameters=None, py_version=PYTHON_VERSION,
                  framework_version=None, image_name=None, **kwargs):
         """
@@ -96,7 +98,7 @@ class PyTorch(Framework):
                             container_log_level=self.container_log_level, code_location=self.code_location,
                             py_version=self.py_version, framework_version=self.framework_version, image=self.image_name,
                             model_server_workers=model_server_workers, sagemaker_session=self.sagemaker_session,
-                            vpc_config=self.get_vpc_config(vpc_config_override))
+                            vpc_config=self.get_vpc_config(vpc_config_override), dependencies=self.dependencies)
 
     @classmethod
     def _prepare_init_params_from_job_description(cls, job_details, model_channel_name=None):

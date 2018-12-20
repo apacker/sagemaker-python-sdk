@@ -30,7 +30,6 @@ class MXNet(Framework):
     __framework_name__ = 'mxnet'
 
     _LOWEST_SCRIPT_MODE_VERSION = ['1', '3']
-    LAUNCH_PS_ENV_NAME = 'sagemaker_parameter_server_enabled'
     LATEST_VERSION = '1.3'
 
     def __init__(self, entry_point, source_dir=None, hyperparameters=None, py_version='py2',
@@ -68,7 +67,7 @@ class MXNet(Framework):
                     Examples:
                         123.dkr.ecr.us-west-2.amazonaws.com/my-custom-image:1.0
                         custom-image:latest.
-             distribution (dict): A dictionary with information on how to run distributed training
+             distributions (dict): A dictionary with information on how to run distributed training
                 (default: None).
             **kwargs: Additional kwargs passed to the :class:`~sagemaker.estimator.Framework` constructor.
         """
@@ -116,7 +115,7 @@ class MXNet(Framework):
                           container_log_level=self.container_log_level, code_location=self.code_location,
                           py_version=self.py_version, framework_version=self.framework_version, image=self.image_name,
                           model_server_workers=model_server_workers, sagemaker_session=self.sagemaker_session,
-                          vpc_config=self.get_vpc_config(vpc_config_override))
+                          vpc_config=self.get_vpc_config(vpc_config_override), dependencies=self.dependencies)
 
     @classmethod
     def _prepare_init_params_from_job_description(cls, job_details, model_channel_name=None):

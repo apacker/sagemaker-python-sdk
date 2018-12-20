@@ -2,11 +2,86 @@
 CHANGELOG
 =========
 
-1.14.3-dev
-=====
+1.16.3
+======
 
+* bug-fix: Local Mode: Allow support for SSH in local mode 
+* bug-fix: Append retry id to default Airflow job name to avoid name collisions in retry
+* bug-fix: Local Mode: No longer requires s3 permissions to run local entry point file
+* feature: Estimators: add support for PyTorch 1.0.0
+* bug-fix: Local Mode: Move dependency on sagemaker_s3_output from rl.estimator to model
+* doc-fix: Fix quotes in estimator.py and model.py
+
+1.16.2
+======
+
+* enhancement: Check for S3 paths being passed as entry point
+* feature: Add support for AugmentedManifestFile and ShuffleConfig
+* bug-fix: Add version bound for requests module to avoid conflicts with docker-compose and docker-py
+* bug-fix: Remove unnecessary dependency tensorflow
+* doc-fix: Change ``distribution`` to ``distributions``
+* bug-fix: Increase docker-compose http timeout and health check timeout to 120.
+* feature: Local Mode: Add support for intermediate output to a local directory.
+* bug-fix: Update PyYAML version to avoid conflicts with docker-compose
+* doc-fix: Correct the numbered list in the table of contents
+* doc-fix: Add Airflow API documentation
+* feature: HyperparameterTuner: add Early Stopping support
+
+1.16.1.post1
+============
+
+* Documentation: add documentation for Reinforcement Learning Estimator.
+* Documentation: update TensorFlow README for Script Mode
+
+1.16.1
+======
+
+* feature: update boto3 to version 1.9.55
+
+1.16.0
+======
+
+* feature: Add 0.10.1 coach version
+* feature: Add support for SageMaker Neo
+* feature: Estimators: Add RLEstimator to provide support for Reinforcement Learning
+* feature: Add support for Amazon Elastic Inference
+* feature: Add support for Algorithm Estimators and ModelPackages: includes support for AWS Marketplace
+* feature: Add SKLearn Estimator to provide support for SciKit Learn
+* feature: Add Amazon SageMaker Semantic Segmentation algorithm to the registry
+* feature: Add support for SageMaker Inference Pipelines
+* feature: Add support for SparkML serving container
+
+
+1.15.2
+======
+
+* bug-fix: Fix FileNotFoundError for entry_point without source_dir
+* doc-fix: Add missing feature 1.5.0 in change log
+* doc-fix: Add README for airflow
+
+1.15.1
+======
+
+* enhancement: Local Mode: add explicit pull for serving
+* feature: Estimators: dependencies attribute allows export of additional libraries into the container
+* feature: Add APIs to export Airflow transform and deploy config
+* bug-fix: Allow code_location argument to be S3 URI in training_config API
+* enhancement: Local Mode: add explicit pull for serving
+
+1.15.0
+======
+
+* feature: Estimator: add script mode and Python 3 support for TensorFlow
 * bug-fix: Changes to use correct S3 bucket and time range for dataframes in TrainingJobAnalytics.
 * bug-fix: Local Mode: correctly handle the case where the model output folder doesn't exist yet
+* feature: Add APIs to export Airflow training, tuning and model config
+* doc-fix: Fix typos in tensorflow serving documentation
+* doc-fix: Add estimator base classes to API docs
+* feature: HyperparameterTuner: add support for Automatic Model Tuning's Warm Start Jobs
+* feature: HyperparameterTuner: Make input channels optional
+* feature: Add support for Chainer 5.0
+* feature: Estimator: add support for MetricDefinitions
+* feature: Estimators: add support for Amazon IP Insights algorithm
 
 1.14.2
 ======
@@ -19,6 +94,7 @@ CHANGELOG
 * build: added pylint
 * build: upgrade docker-compose to 1.23
 * enhancement: Frameworks: update warning for not setting framework_version as we aren't planning a breaking change anymore
+* feature: Estimator: add script mode and Python 3 support for TensorFlow
 * enhancement: Session: remove hardcoded 'training' from job status error message
 * bug-fix: Updated Cloudwatch namespace for metrics in TrainingJobsAnalytics
 * bug-fix: Changes to use correct s3 bucket and time range for dataframes in TrainingJobAnalytics.
